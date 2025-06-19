@@ -1,0 +1,23 @@
+[
+  {
+    "client": "Taofiq Suleiman",
+    "email": "taofiqsuleiman@gmail.com",
+    "due_date": "2025-06-20",
+    "status": "paid",
+    "amount": 5000
+  },
+  {
+    "client": "Lois Gold",
+    "email": "loisadegbohungbe@gmail.com",
+    "due_date": "2025-06-18",
+    "status": "unpaid",
+    "amount": 3000
+  },
+  {
+    "client": "Chinaza Emily",
+    "email": "chinaemily@gmail.com",
+    "due_date": "2025-06-25",
+    "status": "unpaid",
+    "amount": 3000
+  }
+]
