@@ -1,19 +1,25 @@
 [
   {
-    "client": "Taofiq Suleiman",
-    "email": "taofiqsuleiman@gmail.com",
-    "due_date": "2025-06-20",
-    "status": "paid",
+    "invoice_id": "XYZ",
+    "invoice_title": "Shoes Payment",
+    "client": "Taofiq Sulayman",
+    "email": "sulaymantaofiq@gmail.com",
+    "due_date": "2025-06-18",
+    "status": "unpaid",
     "amount": 5000
   },
   {
+    "invoice_id": "ABC",
+    "invoice_title": "Bags Payment",
     "client": "Lois Gold",
     "email": "loisadegbohungbe@gmail.com",
-    "due_date": "2025-06-18",
+    "due_date": "2025-06-20",
     "status": "unpaid",
     "amount": 3000
   },
   {
+    "invoice_id": "DEF",
+    "invoice_title": "Clothes Payment",
     "client": "Chinaza Emily",
     "email": "chinaemily@gmail.com",
     "due_date": "2025-06-25",
