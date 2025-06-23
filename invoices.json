@@ -4,7 +4,7 @@
     "invoice_title": "Shoes Payment",
     "client": "Taofiq Sulayman",
     "email": "sulaymantaofiq@gmail.com",
-    "due_date": "2025-06-18",
+    "due_date": "2025-06-30",
     "status": "unpaid",
     "amount": 5000
   },
@@ -13,7 +13,7 @@
     "invoice_title": "Bags Payment",
     "client": "Lois Gold",
     "email": "loisadegbohungbe@gmail.com",
-    "due_date": "2025-06-20",
+    "due_date": "2025-06-18",
     "status": "unpaid",
     "amount": 3000
   },

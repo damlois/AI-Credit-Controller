@@ -17,7 +17,7 @@ EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 ESCALATION_EMAIL = os.getenv("ESCALATION_EMAIL")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")  # Use a standard model, not a 'thinking' variant
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
 
 ollama_client = ollama.Client(host=OLLAMA_HOST)
 
@@ -35,7 +35,6 @@ def load_invoices(file_path="invoices.json"):
     except FileNotFoundError:
         return []
 
-
 # --- Check overdue invoices --- #
 def check_overdue(invoices):
     today = datetime.today().date()
@@ -44,7 +43,6 @@ def check_overdue(invoices):
         if inv["status"] == "unpaid"
            and datetime.strptime(inv["due_date"], "%Y-%m-%d").date() < today
     ]
-
 
 # --- Send email --- #
 def send_email(recipient, subject, body):
@@ -62,11 +60,38 @@ def send_email(recipient, subject, body):
 
 def ai_should_escalate(message_text):
     prompt = (
-        f"Does the following client message require escalation to a human operator?\n\n"
-        f"\"{message_text}\"\n\n"
-        f"Reply with YES if a human should handle it, or NO if the AI can reply."
+        f"As a professional credit controller, determine whether a client's reply "
+        f"should be escalated to a human. Respond with only YES or NO.\n\n"
+        f"Client's message:\n\"{message_text}\"\n\n"
+        f"Say YES only if the client:\n"
+        f"- Says they have already paid\n"
+        f"- Expresses confusion or surprise about the message\n"
+        f"- Submits a complaint or dispute\n\n"
+        f"Say NO for all other responses, including if the client says they will pay later, "
+        f"or provides information that can be handled without human involvement."
     )
+
     response = ollama_generate(prompt, max_tokens=5).lower()
+    return "yes" in response
+
+def ai_should_reply(message_text):
+    prompt = (
+        f"Determine if the following client message requires a reply from a credit controller. "
+        f"Reply ONLY with YES or NO.\n\n"
+        f"Message:\n\"{message_text}\"\n\n"
+        f"Say NO only if the message is a simple, polite acknowledgment that clearly requires no further response "
+        f"(such as 'Thank you', 'Noted', 'Okay', 'Received').\n\n"
+        f"Say YES if the message:\n"
+        f"- Mentions a future payment or states they will pay later\n"
+        f"- Indicates they have already paid or will send proof of payment\n"
+        f"- Expresses confusion, concern, or dissatisfaction\n"
+        f"- Asks a question or seeks clarification\n"
+        f"- Explains a reason for delay or requests more time\n"
+        f"- Mentions a partial payment or any unusual situation\n"
+        f"- Includes ambiguous or unclear content that might require follow-up"
+    )
+
+    response = ollama_generate(prompt, max_tokens=5).strip().lower()
     return "yes" in response
 
 
@@ -114,20 +139,29 @@ def check_inbox(debug=False):
 
         return replies
 
-
 # --- AI-generated reply --- #
 def generate_reply(message_text):
     prompt = (
-        f"As a professional credit controller at Interprais, respond to this client message: \n\n"
+        f"As a professional credit controller at Interprais, respond to the following client message:\n\n"
         f"\"{message_text}\"\n\n"
-        f"Craft a thoughtful, human-like email reply based on the client's message. "
-        f"If they mention they will pay soon, thank them and ask for a specific payment date. "
-        f"If they say they've already paid, politely apologize for any discrepancy and assure them that you'll double-check the records and confirm shortly. "
-        f"If they express concerns or reasons for delay, show understanding and encourage them to suggest a realistic payment date. "
-        f"Use a warm, respectful, and professional tone. Keep the reply concise and clear."
+        f"Craft a single, thoughtful, human-like email reply based on the message. Choose only one appropriate response, "
+        f"based on the client's intent.\n\n"
+        f"- If the client says they will pay soon but doesn't give a date, thank them and ask for a specific payment date.\n"
+        f"- If they already provided a date, acknowledge it politely.\n"
+        f"- If they say they've already paid, apologize for any discrepancy and let them know you’ll verify and confirm.\n"
+        f"- If they share a concern or delay, acknowledge it and request a realistic payment date.\n\n"
+        f"Only reply with the one appropriate message — do not list multiple variations or explanations.**\n"
+        f"Use a respectful and warm professional tone. Keep it concise and ready to send.\n"
+        f"Do not include placeholders, commentary, or contact info.\n\n"
+        f"Reply in this format:\n\n"
+        f"Subject: [A short subject line]\n\n"
+        f"Dear Customer,\n\n"
+        f"[Email body]\n\n"
+        f"Interprais Credit Controller"
     )
-    response = ollama_generate(prompt, max_tokens=200)
-    return response
+
+    return ollama_generate(prompt, max_tokens=350)
+
 
 
 
@@ -142,93 +176,98 @@ def generate_initial_reminder(client_name, amount, due_date):
         f"Subject: [A short subject line]\n\n"
         f"Dear {client_name},\n\n"
         f"[Email body]\n\n"
-        f"Thank you."
+        # f"Thank you.\n\n"
+        f"Interprais Credit Controller"
     )
-    response = ollama_generate(prompt, max_tokens=250)
-    return response
+    return ollama_generate(prompt, max_tokens=250)
 
-
-# --- Utility function: extract_email_address --- #
+# --- Extract email from header --- #
 def extract_email_address(full_address):
     match = re.search(r'<(.+?)>', full_address)
-    if match:
-        return match.group(1)
-    return full_address.strip()
-
+    return match.group(1) if match else full_address.strip()
 
 # --- UI --- #
-st.set_page_config(page_title="AI Credit Controller", page_icon="📧", layout="wide")
+st.set_page_config(page_title="AI Credit Controller", page_icon="📧")
 st.title("📧 AI Credit Controller")
+# --- Auto-refresh every 30 seconds --- #
+# interval is in milliseconds, so 30000 = 30s
+st_autorefresh(interval=30 * 1000, key="inbox_refresher")
 
-# --- Two-column layout --- #
-col1, col2 = st.columns([1, 1])
 
-# --- Control Panel & Status (Left Column) --- #
+if "log_history" not in st.session_state:
+    st.session_state["log_history"] = []
+
+# --- Load and display invoice stats --- #
+invoices = load_invoices()
+overdue_invoices = check_overdue(invoices)
+overdue_count = len(overdue_invoices)
+
+# --- Show Invoice Table --- #
+st.subheader("🧾 Invoice List")
+if invoices:
+    st.dataframe(invoices, use_container_width=True)
+else:
+    st.error("No invoice data found. Ensure 'invoices.json' exists.")
+
+col1, col2 = st.columns(2)
+
 with col1:
-    st.header("⚙️ Control Panel & Status")
-    # Interval controls
-    st.subheader("Automation Settings")
-    if "interval" not in st.session_state:
-        st.session_state["interval"] = 60  # Default to 1 minute
-    interval = st.number_input(
-        "Interval (seconds) for background tasks",
-        min_value=30,
-        max_value=3600,
-        value=st.session_state["interval"],
-        step=30,
-        help="How often to check for overdue invoices and new emails."
-    )
-    st.session_state["interval"] = interval
-    # Display summary stats
-    invoices = load_invoices()
-    overdue_count = len(check_overdue(invoices))
-    st.metric("Overdue Invoices", overdue_count)
     st.metric("Total Invoices", len(invoices))
-    # You can add more metrics as needed
 
-# --- Activity Log (Right Column) --- #
 with col2:
-    st.header("📋 Activity Log")
-    log_placeholder = st.empty()
-    if "log_history" not in st.session_state:
-        st.session_state["log_history"] = []
+    st.metric("Overdue Invoices", overdue_count)
 
-# --- Polling/Automation Logic --- #
-# Use st_autorefresh to refresh the app at the selected interval
-st_autorefresh(interval=interval * 1000, key="autorefresh")
-
-# Only run automation logic once per refresh
-if "last_run" not in st.session_state or st.session_state["last_run"] != st.session_state["interval"]:
-    st.session_state["last_run"] = st.session_state["interval"]
-    # --- Overdue invoice check and reminders --- #
+# --- Only send initial reminders once per session --- #
+if "reminders_sent" not in st.session_state:
     try:
-        overdue_invoices = check_overdue(invoices)
         if overdue_invoices:
-            for inv in overdue_invoices:
-                body = generate_initial_reminder(inv['client'], inv['amount'], inv['due_date'])
-                send_email(inv["email"], "Invoice Reminder", body)
-                st.session_state["log_history"].append(f"[Reminder] Sent to {inv['client']} ({inv['email']}) for invoice due {inv['due_date']}")
+            with st.spinner("📤 Sending payment reminders..."):
+                for inv in overdue_invoices:
+                    body = generate_initial_reminder(inv['client'], inv['amount'], inv['due_date'])
+                    send_email(inv["email"], "Payment Reminder", body)
+                    st.session_state["log_history"].append(
+                        f"[Reminder] Sent to {inv['client']} ({inv['email']}) for invoice due {inv['due_date']}"
+                    )
         else:
             st.session_state["log_history"].append("[Reminder] No overdue invoices found.")
+        st.session_state["reminders_sent"] = True
     except Exception as e:
         st.session_state["log_history"].append(f"[Error] Overdue check: {e}")
-    # --- Inbox check and reply handling --- #
+
+
+
+# --- Show Activity Log --- #
+st.subheader("📋 Activity Log")
+log_lines = st.session_state["log_history"][-50:]
+st.code("\n".join(log_lines), language="text")
+
+with st.spinner("📬 Auto-checking inbox for replies..."):
     try:
-        replies = check_inbox(debug=False)
+        replies = check_inbox(debug=True)
         if not replies:
-            st.session_state["log_history"].append("[Inbox] No new replies found.")
+            st.session_state["log_history"].append("[Auto Inbox Check] No new replies.")
         else:
-            st.session_state["log_history"].append(f"[Inbox] Found {len(replies)} new email(s). Processing...")
+            st.session_state["log_history"].append(f"[Auto Inbox Check] Found {len(replies)} new email(s). Processing...")
             for sender, subject, content in replies:
                 try:
+                    if not ai_should_reply(content):
+                        st.session_state["log_history"].append(
+                            f"[No Reply Needed] Message from {sender} skipped: '{content[:60]}...'"
+                        )
+                        continue  # Skip further processing
+
                     if ai_should_escalate(content):
-                        escalation_body = f"""
-                        ⚠️ AI Agent Escalation Notice\n\nFrom: {sender}\nSubject: {subject}\nMessage:\n{content}
-                        """
+                        escalation_body = (
+                            f"⚠️ AI Agent Escalation Notice\n\nFrom: {sender}\nSubject: {subject}\nMessage:\n{content}"
+                        )
                         send_email(ESCALATION_EMAIL, f"⚠️ Escalation Needed: {subject}", escalation_body)
-                        st.session_state["log_history"].append(f"[Escalation] Escalated to human team for {sender} | Subject: {subject}")
+                        st.session_state["log_history"].append(
+                            f"[Escalation] Escalated to human team for {sender} | Subject: {subject}"
+                        )
                         client_message = (
-                            f"Dear Client,\n\nThank you for your message regarding '{subject}'.\nOur team has been notified and will get back to you shortly after reviewing your case.\n\nBest regards,\nInterprais Credit Team"
+                            f"Dear Customer,\n\nThank you for your message regarding '{subject}'.\n"
+                            f"Our team has been notified and will get back to you shortly after reviewing your case.\n\n"
+                            f"Interprais Credit Controller"
                         )
                         recipient = extract_email_address(sender)
                         send_email(recipient, f"Re: {subject}", client_message)
@@ -240,19 +279,8 @@ if "last_run" not in st.session_state or st.session_state["last_run"] != st.sess
                         st.session_state["log_history"].append(f"[AI Reply] Sent to {recipient} | Subject: {subject}")
                 except Exception as e:
                     st.session_state["log_history"].append(f"[Error] Processing reply from {sender}: {e}")
+
     except Exception as e:
-        st.session_state["log_history"].append(f"[Error] Inbox check: {e}")
+        st.session_state["log_history"].append(f"[Error] Auto inbox check: {e}")
 
-# --- Show the last 50 log entries --- #
-with col2:
-    log_lines = st.session_state["log_history"][-50:]
-    log_placeholder.code("\n".join(log_lines), language="text")
-
-# --- Invoice Table (Left Column) --- #
-with col1:
-    if invoices:
-        st.subheader("🧾 Invoice List")
-        st.dataframe(invoices, use_container_width=True)
-    else:
-        st.error("No invoice data found. Ensure 'invoices.json' exists.")
 
