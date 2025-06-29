@@ -24,7 +24,7 @@ ollama_client = ollama.Client(host=OLLAMA_HOST)
 def ollama_generate(prompt, model=None, max_tokens=250):
     if model is None:
         model = OLLAMA_MODEL
-    response = ollama_client.generate(model=model, prompt=prompt, options={"num_predict": max_tokens})
+    response = ollama_client.generate(model=model, prompt=prompt, think=False, options={"num_predict": max_tokens})
     return response['response'].strip() if 'response' in response else "[No response from Ollama]"
 
 # --- Load invoice data --- #

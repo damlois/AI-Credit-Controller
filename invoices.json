@@ -1,10 +1,10 @@
 [
   {
-    "invoice_id": "XYZ",
+    "invoice_id": "XYZ0011",
     "invoice_title": "Shoes Payment",
     "client": "Taofiq Sulayman",
     "email": "sulaymantaofiq@gmail.com",
-    "due_date": "2025-06-30",
+    "due_date": "2025-06-21",
     "status": "unpaid",
     "amount": 5000
   },
@@ -13,7 +13,7 @@
     "invoice_title": "Bags Payment",
     "client": "Lois Gold",
     "email": "loisadegbohungbe@gmail.com",
-    "due_date": "2025-06-18",
+    "due_date": "2025-07-18",
     "status": "unpaid",
     "amount": 3000
   },
@@ -22,7 +22,7 @@
     "invoice_title": "Clothes Payment",
     "client": "Chinaza Emily",
     "email": "chinaemily@gmail.com",
-    "due_date": "2025-06-25",
+    "due_date": "2025-07-25",
     "status": "unpaid",
     "amount": 3000
   }
