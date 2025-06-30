@@ -9,11 +9,11 @@
     "amount": 5000
   },
   {
-    "invoice_id": "ABC",
+    "invoice_id": "INV-2025-004",
     "invoice_title": "Bags Payment",
     "client": "Lois Gold",
     "email": "loisadegbohungbe@gmail.com",
-    "due_date": "2025-07-18",
+    "due_date": "2025-06-18",
     "status": "unpaid",
     "amount": 3000
   },

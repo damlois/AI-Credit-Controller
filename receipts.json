@@ -1,0 +1,16 @@
+[
+  {
+    "receipt_id": "RCPT-001",
+    "invoice_id": "INV-2025-004",
+    "amount": 3000,
+    "payment_date": "2025-06-25",
+    "method": "Bank Transfer"
+  },
+  {
+    "receipt_id": "RCPT-002",
+    "invoice_id": "INV-2023-004",
+    "amount": 50000,
+    "payment_date": "2023-12-01",
+    "method": "Credit Card"
+  }
+]
