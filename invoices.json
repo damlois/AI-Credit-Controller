@@ -5,7 +5,7 @@
     "client": "Taofiq Sulayman",
     "email": "sulaymantaofiq@gmail.com",
     "due_date": "2025-06-30",
-    "status": "unpaid",
+    "status": "paid",
     "amount": 5000
   },
   {
@@ -23,7 +23,7 @@
     "client": "Chinaza Emily",
     "email": "chinaemily@gmail.com",
     "due_date": "2025-06-25",
-    "status": "unpaid",
+    "status": "paid",
     "amount": 3000
   }
 ]
