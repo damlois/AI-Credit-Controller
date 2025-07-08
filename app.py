@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import smtplib
 import imaplib
 import email
@@ -11,7 +11,7 @@ import ollama
 import re
 from streamlit_autorefresh import st_autorefresh
 
-# --- Load environment variables ---
+# --- Load environment variables --- #
 load_dotenv()
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
@@ -50,7 +50,7 @@ def ollama_generate(prompt, model=None, max_tokens=250):
     return response['response'].strip() if 'response' in response else "[No response from Ollama]"
 
 
-# --- Load invoice data ---
+# --- Load invoice data --- #
 def load_invoices(file_path="invoices.json"):
     try:
         with open(file_path, "r") as f:
@@ -58,7 +58,7 @@ def load_invoices(file_path="invoices.json"):
     except FileNotFoundError:
         return []
 
-# --- Load receipt data ---
+# --- Load receipt data --- #
 def load_receipts(file_path="receipts.json"):
     try:
         with open(file_path, "r") as f:
@@ -67,34 +67,69 @@ def load_receipts(file_path="receipts.json"):
         return []
 
 
-# --- Check overdue invoices ---
+# --- Check overdue invoices --- #
 def check_overdue(invoices, paid_invoice_ids=None):
     if paid_invoice_ids is None:
         paid_invoice_ids = set()
     today = datetime.today().date()
-    overdue_list = []
+
+    overdue_by_due_date = []
+    overdue_by_promised_date = []
+
     for inv in invoices:
         if inv["invoice_id"] in paid_invoice_ids:
             continue
 
         due_date = datetime.strptime(inv["due_date"], "%Y-%m-%d").date()
-        is_overdue_by_due_date = due_date < today
+        promised_date = None
+        if inv.get("promised_date"):
+            try:
+                promised_date = datetime.strptime(inv["promised_date"], "%Y-%m-%d").date()
+            except ValueError:
+                promised_date = None
+
+        # Overdue by original due date (no valid promised date or promised date is in the future)
+        if due_date < today and (promised_date is None or promised_date >= today):
+            overdue_by_due_date.append(inv)
+        # Overdue by promised date (promised date is in the past)
+        elif promised_date and promised_date < today:
+            overdue_by_promised_date.append(inv)
+
+    return overdue_by_due_date, overdue_by_promised_date
+
+def get_approaching_invoices(invoices, paid_invoice_ids=None):
+    if paid_invoice_ids is None:
+        paid_invoice_ids = set()
+    today = datetime.today().date()
+    approaching_list = []
+
+    for inv in invoices:
+        if inv["invoice_id"] in paid_invoice_ids:
+            continue
+
+        due_date = datetime.strptime(inv["due_date"], "%Y-%m-%d").date()
+        time_to_due = (due_date - today).days
 
         promised_date = None
         if inv.get("promised_date"):
             try:
                 promised_date = datetime.strptime(inv["promised_date"], "%Y-%m-%d").date()
             except ValueError:
-                # Handle cases where promised_date might be in a different format or invalid
                 promised_date = None
 
-        if is_overdue_by_due_date:
-            if promised_date is None or promised_date < today:
-                overdue_list.append(inv)
-    return overdue_list
+        # If there's a promised date, check if it's approaching
+        if promised_date:
+            time_to_promised = (promised_date - today).days
+            if 0 <= time_to_promised <= 2:
+                approaching_list.append(inv)
+        # If no promised date, check if original due date is approaching
+        elif 0 <= time_to_due <= 2:
+            approaching_list.append(inv)
+
+    return approaching_list
 
 
-# --- Send email ---
+# --- Send email --- #
 def send_email(recipient, subject, body):
     if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
         raise ValueError("EMAIL_ADDRESS and EMAIL_PASSWORD must be set in the environment.")
@@ -139,7 +174,71 @@ def update_invoice_promised_date(invoice_id, promised_date):
         json.dump(invoices, f, indent=2)
         f.truncate()
 
-# --- Check inbox for replies ---
+def send_human_agent_reminders():
+    today = datetime.today().date()
+    reminders_sent = False
+
+    # Load all invoices and receipts
+    invoices = load_invoices()
+    receipts = load_receipts()
+    paid_invoice_ids = {receipt["invoice_id"] for receipt in receipts}
+
+    # Filter for invoices that are not yet paid
+    unpaid_invoices = [inv for inv in invoices if inv["invoice_id"] not in paid_invoice_ids]
+
+    approaching_due_invoices = []
+    approaching_promised_invoices = []
+
+    for inv in unpaid_invoices:
+        due_date = datetime.strptime(inv["due_date"], "%Y-%m-%d").date()
+        time_to_due = (due_date - today).days
+
+        # Check for invoices approaching original due date (if no promised date)
+        if inv.get("promised_date") is None:
+            if 0 <= time_to_due <= 2:  # Due today or within next 2 days
+                approaching_due_invoices.append(inv)
+        else:
+            # Check for invoices approaching promised date
+            try:
+                promised_date = datetime.strptime(inv["promised_date"], "%Y-%m-%d").date()
+                time_to_promised = (promised_date - today).days
+                if 0 <= time_to_promised <= 2:  # Promised today or within next 2 days
+                    approaching_promised_invoices.append(inv)
+            except ValueError:
+                # Handle invalid promised_date format, treat as no promised date
+                if 0 <= time_to_due <= 2:  # Due today or within next 2 days
+                    approaching_due_invoices.append(inv)
+
+    if approaching_due_invoices or approaching_promised_invoices:
+        body = "Dear Agent,\n\nThe following invoices require your attention:\n\n"
+
+        if approaching_due_invoices:
+            body += "--- Invoices Approaching Original Due Date (2 days or less) ---\n"
+            for inv in approaching_due_invoices:
+                body += f"- Invoice ID: {inv['invoice_id']}, Client: {inv['client']}, Amount: ₦{inv['amount']}, Due Date: {inv['due_date']}\n"
+            body += "\n"
+
+        if approaching_promised_invoices:
+            body += "--- Invoices Approaching Promised Payment Date (2 days or less) ---\n"
+            for inv in approaching_promised_invoices:
+                body += f"- Invoice ID: {inv['invoice_id']}, Client: {inv['client']}, Amount: ₦{inv['amount']}, Promised Date: {inv['promised_date']}\n"
+            body += "\n"
+
+        body += "Please follow up as necessary.\n\nBest regards,\nYour AI Credit Controller"
+
+        try:
+            send_email(ESCALATION_EMAIL, "Action Required: Invoices Approaching Due/Promised Dates", body)
+            st.session_state["log_history"].append("[Human Agent Reminder] Sent email about approaching invoices.")
+            reminders_sent = True
+        except Exception as e:
+            st.session_state["log_history"].append(f"[Error] Sending human agent reminder: {e}")
+    else:
+        st.session_state["log_history"].append("[Human Agent Reminder] No invoices approaching due/promised dates.")
+
+    return reminders_sent
+
+
+# --- Check inbox for replies --- #
 def check_inbox(debug=False):
     if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
         raise ValueError("EMAIL_ADDRESS and EMAIL_PASSWORD must be set in the environment.")
@@ -184,7 +283,7 @@ def check_inbox(debug=False):
         return replies
 
 
-# --- AI-generated reply ---
+# --- AI-generated reply --- #
 def generate_reply(invoice_id, new_message, category='QUESTION', current_date=None):
     # Load past conversation history
     try:
@@ -228,7 +327,7 @@ def generate_reply(invoice_id, new_message, category='QUESTION', current_date=No
         prompt += "The client has a question. Answer it professionally based on the context.\n"
 
     prompt += (
-        "Only reply with the one appropriate message — do not list multiple variations or explanations." 
+        "Only reply with the one appropriate message — do not list multiple variations or explanations."
         "Do not include any placeholders, commentary, or contact information.\n"
         "Do not include any detail you do not have such as invoice number, come up with a message that requires no edit and can be sent directly to the client\n"
         "Respond in this format:\n\n"
@@ -249,7 +348,7 @@ def generate_reply(invoice_id, new_message, category='QUESTION', current_date=No
     return subject, body
 
 
-# --- AI-generated invoice reminder ---
+# --- AI-generated invoice reminder --- #
 def generate_initial_reminder(client_name, amount, due_date, invoice_no):
     prompt = (
         f"Write a concise, professional, and polite email reminder to {client_name} about their overdue invoice, with invoice number {invoice_no} of ₦{amount} due on {due_date}. "
@@ -264,48 +363,52 @@ def generate_initial_reminder(client_name, amount, due_date, invoice_no):
     return ollama_generate(prompt, max_tokens=250)
 
 
-
-# --- Extract email from header ---
+# --- Extract email from header --- #
 def extract_email_address(full_address):
     match = re.search(r'<(.+?)>', full_address)
     return match.group(1) if match else full_address.strip()
 
 
-# --- UI ---
+# --- UI --- #
 st.set_page_config(page_title="AI Credit Controller", page_icon="📧")
 st.title("📧 AI Credit Controller")
-# --- Auto-refresh every 30 seconds ---
+# --- Auto-refresh every 30 seconds --- #
 st_autorefresh(interval=30 * 1000, key="inbox_refresher")
 
 if "log_history" not in st.session_state:
     st.session_state["log_history"] = []
 
-# --- Load receipts and filter invoices ---
-# --- Load and display invoice stats ---
+# --- Load receipts and filter invoices --- #
+# --- Load and display invoice stats --- #
 invoices = load_invoices()
 receipts = load_receipts()
 paid_invoice_ids = {receipt["invoice_id"] for receipt in receipts}
 filtered_invoices = [inv for inv in invoices if inv["invoice_id"] not in paid_invoice_ids]
 
-overdue_invoices = check_overdue(invoices, paid_invoice_ids)
-overdue_count = len(overdue_invoices)
+overdue_by_due_date, overdue_by_promised_date = check_overdue(invoices, paid_invoice_ids)
+approaching_invoices = get_approaching_invoices(invoices, paid_invoice_ids)
 
-st.subheader("🧾 Overdue Invoices")
-if overdue_invoices:
-    st.dataframe(overdue_invoices, use_container_width=True)
+
+st.subheader("🧾 Overdue Invoices (Original Due Date)")
+if overdue_by_due_date:
+    st.dataframe(overdue_by_due_date, use_container_width=True)
 else:
-    st.success("No overdue invoices found based on due dates and promised dates.")
+    st.success("No invoices overdue by original due date.")
+
+st.subheader("🗓️ Overdue Invoices (Promised Date Passed)")
+if overdue_by_promised_date:
+    st.dataframe(overdue_by_promised_date, use_container_width=True)
+else:
+    st.success("No invoices overdue by promised date.")
+
+st.subheader("⏳ Invoices Approaching Due/Promised Dates")
+if approaching_invoices:
+    st.dataframe(approaching_invoices, use_container_width=True)
+else:
+    st.success("No invoices approaching due or promised dates.")
 
 
-# col1, col2 = st.columns(2)
-#
-# with col1:
-#     st.metric("Total Invoices", len(invoices))
-#
-# with col2:
-#     st.metric("Overdue Invoices", overdue_count)
-
-# --- Only send initial reminders if no conversation exists ---
+# --- Only send initial reminders if no conversation exists --- #
 if "reminders_sent" not in st.session_state:
     try:
         with open(CONVERSATION_LOG_PATH, "r") as f:
@@ -313,7 +416,7 @@ if "reminders_sent" not in st.session_state:
         existing_clients = history.keys()
 
         reminders_to_send = [
-            inv for inv in overdue_invoices if inv["invoice_id"] not in existing_clients
+            inv for inv in overdue_by_due_date + overdue_by_promised_date if inv["invoice_id"] not in existing_clients
         ]
 
         if reminders_to_send:
@@ -336,7 +439,10 @@ if "reminders_sent" not in st.session_state:
     except Exception as e:
         st.session_state["log_history"].append(f"[Error] Overdue check: {e}")
 
-# --- Show Activity Log ---
+# Send human agent reminders
+send_human_agent_reminders()
+
+# --- Show Activity Log --- #
 st.subheader("📋 Activity Log")
 log_lines = st.session_state["log_history"][-50:]
 st.code("\n".join(log_lines), language="text")
@@ -391,9 +497,7 @@ with st.spinner("📬 Auto-checking inbox for replies..."):
                             f"Message:\n{content}"
                         )
                         send_email(ESCALATION_EMAIL, f"⚠️ Escalation Needed: Invoice {invoice_id}", escalation_body)
-                        st.session_state["log_history"].append(
-                            f"[Escalation] Escalated to human team for invoice {invoice_id} from {sender} | Subject: {subject}"
-                        )
+                        st.session_state["log_history"].append(f"[Escalation] Escalated to human team for invoice {invoice_id} from {sender} | Subject: {subject}")
                         subject, client_message = generate_reply(invoice_id, content, category, current_date=datetime.today().strftime('%Y-%m-%d'))
                         send_email(recipient, subject, client_message)
                         st.session_state["log_history"].append(f"[Escalation] Client notified at {recipient}")
