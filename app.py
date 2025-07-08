@@ -370,10 +370,10 @@ def extract_email_address(full_address):
 
 
 # --- UI --- #
-st.set_page_config(page_title="AI Credit Controller", page_icon="📧")
+st.set_page_config(page_title="AI Credit Controller", page_icon="📧", layout="wide")
 st.title("📧 AI Credit Controller")
 # --- Auto-refresh every 30 seconds --- #
-st_autorefresh(interval=30 * 1000, key="inbox_refresher")
+st_autorefresh(interval=20 * 1000, key="inbox_refresher")
 
 if "log_history" not in st.session_state:
     st.session_state["log_history"] = []
@@ -389,24 +389,44 @@ overdue_by_due_date, overdue_by_promised_date = check_overdue(invoices, paid_inv
 approaching_invoices = get_approaching_invoices(invoices, paid_invoice_ids)
 
 
-st.subheader("🧾 Overdue Invoices (Original Due Date)")
-if overdue_by_due_date:
-    st.dataframe(overdue_by_due_date, use_container_width=True)
-else:
-    st.success("No invoices overdue by original due date.")
+col1, col2 = st.columns([1, 1])
 
-st.subheader("🗓️ Overdue Invoices (Promised Date Passed)")
-if overdue_by_promised_date:
-    st.dataframe(overdue_by_promised_date, use_container_width=True)
-else:
-    st.success("No invoices overdue by promised date.")
+with col1:
+    st.subheader("🧾 Overdue Invoices (Original Due Date)")
+    if overdue_by_due_date:
+        st.dataframe(overdue_by_due_date, use_container_width=True)
+    else:
+        st.success("No invoices overdue by original due date.")
 
-st.subheader("⏳ Invoices Approaching Due/Promised Dates")
-if approaching_invoices:
-    st.dataframe(approaching_invoices, use_container_width=True)
-else:
-    st.success("No invoices approaching due or promised dates.")
+    st.subheader("🗓️ Overdue Invoices (Promised Date Passed)")
+    if overdue_by_promised_date:
+        st.dataframe(overdue_by_promised_date, use_container_width=True)
+    else:
+        st.success("No invoices overdue by promised date.")
 
+    st.subheader("⏳ Invoices Approaching Due/Promised Dates")
+    if approaching_invoices:
+        st.dataframe(approaching_invoices, use_container_width=True)
+    else:
+        st.success("No invoices approaching due or promised dates.")
+
+    with st.expander("🗂 View Conversation History"):
+        try:
+            with open(CONVERSATION_LOG_PATH, "r") as f:
+                history = json.load(f)
+            for client, exchanges in history.items():
+                st.markdown(f"**{client}**")
+                for turn in exchanges:
+                    st.markdown(f"- 🧑‍💼 Client: {turn['user']}")
+                    st.markdown(f"- 🤖 AI: {turn['ai']}")
+                    st.markdown("---")
+        except Exception as e:
+            st.error(f"Error loading conversation history: {e}")
+
+with col2:
+    st.subheader("📋 Activity Log")
+    log_lines = st.session_state["log_history"][-50:]
+    st.code("\n".join(log_lines), language="text")
 
 # --- Only send initial reminders if no conversation exists --- #
 if "reminders_sent" not in st.session_state:
@@ -442,23 +462,6 @@ if "reminders_sent" not in st.session_state:
 # Send human agent reminders
 send_human_agent_reminders()
 
-# --- Show Activity Log --- #
-st.subheader("📋 Activity Log")
-log_lines = st.session_state["log_history"][-50:]
-st.code("\n".join(log_lines), language="text")
-
-with st.expander("🗂 View Conversation History"):
-    try:
-        with open(CONVERSATION_LOG_PATH, "r") as f:
-            history = json.load(f)
-        for client, exchanges in history.items():
-            st.markdown(f"**{client}**")
-            for turn in exchanges:
-                st.markdown(f"- 🧑‍💼 Client: {turn['user']}")
-                st.markdown(f"- 🤖 AI: {turn['ai']}")
-                st.markdown("---")
-    except Exception as e:
-        st.error(f"Error loading conversation history: {e}")
 
 with st.spinner("📬 Auto-checking inbox for replies..."):
 
