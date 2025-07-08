@@ -185,7 +185,7 @@ def check_inbox(debug=False):
 
 
 # --- AI-generated reply ---
-def generate_reply(invoice_id, new_message, category='QUESTION'):
+def generate_reply(invoice_id, new_message, category='QUESTION', current_date=None):
     # Load past conversation history
     try:
         with open(CONVERSATION_LOG_PATH, "r") as f:
@@ -212,9 +212,13 @@ def generate_reply(invoice_id, new_message, category='QUESTION'):
 
     # Add category-specific instructions
     if category == 'PROMISE_TO_PAY':
+        if current_date:
+            prompt += f"Today's date is {current_date}. "
         prompt += (
-            "The client has promised to pay. If they've given a specific date, acknowledge it. "
-            "If not, politely ask for a specific date.\n"
+            "The client has promised to pay. Your reply MUST include the promised date in YYYY-MM-DD format at the very end of the email body, like this: [PROMISED_DATE: YYYY-MM-DD]. "
+            "If the client does not provide a specific date, you MUST state [PROMISED_DATE: NONE] at the very end of the email body. "
+            "Example: If client says 'next Monday', and next Monday is 2025-07-14, your reply should end with [PROMISED_DATE: 2025-07-14]. "
+            "Example: If client says 'soon', your reply should end with [PROMISED_DATE: NONE].\n"
         )
     elif category == 'PAID':
         prompt += "The client claims they have already paid. Apologize for the reminder and let them know you will verify the payment and get back to them.\n"
@@ -224,17 +228,25 @@ def generate_reply(invoice_id, new_message, category='QUESTION'):
         prompt += "The client has a question. Answer it professionally based on the context.\n"
 
     prompt += (
-        "Only reply with the one appropriate message — do not list multiple variations or explanations."
+        "Only reply with the one appropriate message — do not list multiple variations or explanations." 
         "Do not include any placeholders, commentary, or contact information.\n"
         "Do not include any detail you do not have such as invoice number, come up with a message that requires no edit and can be sent directly to the client\n"
         "Respond in this format:\n\n"
-        "Subject: [A short subject line]\n\n"
         "Dear Customer,\n\n"
         "[Email body]\n\n"
         "Interprais Credit Controller"
     )
 
-    return ollama_generate(prompt, max_tokens=350)
+    response_text = ollama_generate(prompt, max_tokens=350)
+
+    # Extract subject and body
+    subject_match = re.search(r"Subject: (.+?)\n", response_text)
+    subject = subject_match.group(1).strip() if subject_match else "No Subject"
+
+    body = response_text.split("\n\n", 1)[1].strip() if "\n\n" in response_text else response_text
+    body = re.sub(r"Subject: .+\n\n", "", body, 1) # Remove subject line from body if present
+
+    return subject, body
 
 
 # --- AI-generated invoice reminder ---
@@ -382,13 +394,13 @@ with st.spinner("📬 Auto-checking inbox for replies..."):
                         st.session_state["log_history"].append(
                             f"[Escalation] Escalated to human team for invoice {invoice_id} from {sender} | Subject: {subject}"
                         )
-                        client_message = generate_reply(invoice_id, content, category)
-                        send_email(recipient, f"Re: {subject}", client_message)
+                        subject, client_message = generate_reply(invoice_id, content, category, current_date=datetime.today().strftime('%Y-%m-%d'))
+                        send_email(recipient, subject, client_message)
                         st.session_state["log_history"].append(f"[Escalation] Client notified at {recipient}")
                         save_conversation(invoice_id, content, client_message)
                     else: # PROMISE_TO_PAY or QUESTION
-                        reply = generate_reply(invoice_id, content, category)
-                        send_email(recipient, "Re: " + subject, reply)
+                        subject, reply = generate_reply(invoice_id, content, category, current_date=datetime.today().strftime('%Y-%m-%d'))
+                        send_email(recipient, subject, reply)
                         st.session_state["log_history"].append(f"[AI Reply] Sent to {recipient} for invoice {invoice_id} | Subject: {subject}")
                         save_conversation(invoice_id, content, reply)
 
