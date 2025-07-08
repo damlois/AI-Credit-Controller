@@ -5,7 +5,6 @@
     "client": "Taofiq Sulayman",
     "email": "sulaymantaofiq@gmail.com",
     "due_date": "2025-06-30",
-    "status": "paid",
     "amount": 5000
   },
   {
@@ -13,8 +12,23 @@
     "invoice_title": "Bags Payment",
     "client": "Lois Gold",
     "email": "loisadegbohungbe@gmail.com",
-    "due_date": "2025-06-18",
-    "status": "unpaid",
+    "due_date": "2025-06-29",
+    "amount": 3000
+  },
+  {
+    "invoice_id": "FEP",
+    "invoice_title": "Baby clothes Payment",
+    "client": "Kolap Ayomide",
+    "email": "lois0168@gmail.com",
+    "due_date": "2025-06-30",
+    "amount": 3000
+  },
+  {
+    "invoice_id": "MRZ",
+    "invoice_title": "Laptop Payment",
+    "client": "Sheraton Gates",
+    "email": "sheratongat@gmail.com",
+    "due_date": "2025-06-29",
     "amount": 3000
   },
   {
@@ -23,7 +37,6 @@
     "client": "Chinaza Emily",
     "email": "chinaemily@gmail.com",
     "due_date": "2025-06-25",
-    "status": "paid",
     "amount": 3000
   }
 ]

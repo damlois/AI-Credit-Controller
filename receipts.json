@@ -1,0 +1,24 @@
+[
+  {
+    "receipt_id": "R-XYZ-001",
+    "invoice_id": "MRZ",
+    "client": "Sheraton Gates",
+    "email": "sheratongat@gmail.com",
+    "amount_paid": 5000,
+    "payment_date": "2025-06-30",
+    "payment_method": "bank transfer",
+    "status": "paid",
+    "description": "Payment for Shoes"
+  },
+  {
+    "receipt_id": "R-DEF-002",
+    "invoice_id": "DEF",
+    "client": "Chinaza Emily",
+    "email": "chinaemily@gmail.com",
+    "amount_paid": 3000,
+    "payment_date": "2025-06-25",
+    "payment_method": "credit card",
+    "status": "paid",
+    "description": "Payment for Clothes"
+  }
+]
