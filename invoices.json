@@ -6,7 +6,7 @@
     "email": "sulaymantaofiq@gmail.com",
     "due_date": "2025-06-30",
     "amount": 5000,
-    "promised_date": null
+    "promised_date": "2025-07-12"
   },
   {
     "invoice_id": "ABC",
@@ -54,24 +54,6 @@
     "promised_date": null
   },
   {
-    "invoice_id": "INV005",
-    "invoice_title": "App Development",
-    "client": "Eve Adams",
-    "email": "eve.a@example.com",
-    "due_date": "2025-07-08",
-    "amount": 2500,
-    "promised_date": "2025-07-11"
-  },
-  {
-    "invoice_id": "INV006",
-    "invoice_title": "Graphic Design",
-    "client": "Frank White",
-    "email": "frank.w@example.com",
-    "due_date": "2025-06-20",
-    "amount": 450,
-    "promised_date": "2025-07-19"
-  },
-  {
     "invoice_id": "INV007",
     "invoice_title": "Consulting",
     "client": "Grace Lee",
@@ -79,14 +61,5 @@
     "due_date": "2025-07-11",
     "amount": 1500,
     "promised_date": null
-  },
-  {
-    "invoice_id": "INV008",
-    "invoice_title": "IT Support",
-    "client": "Henry Green",
-    "email": "henry.g@example.com",
-    "due_date": "2025-07-07",
-    "amount": 700,
-    "promised_date": "2025-07-15"
   }
 ]
